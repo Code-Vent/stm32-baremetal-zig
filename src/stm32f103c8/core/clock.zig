@@ -18,6 +18,7 @@ pub const Config = struct {
                 freq = 4_000_000;
             },
             2...13 => {
+                //8-52MHz in steps of 4MHz
                 //HSI = ON, PLL = ON, HSE = OFF, PLLSRC = 0
                 //Set pllmull to (mull - 2)
                 //Select PLLCLK with sw bits
@@ -26,6 +27,7 @@ pub const Config = struct {
                 freq = mul * 4_000_000;
             },
             else => {
+                //56-72MHz in steps of 8MHz
                 const mul1 = @as(u32, freq_in_MHz >> 3);
                 //HSE = ON, PLL = ON, HSI = OFF, PLLXTPRE = 0, PLLSRC = 1
                 //Set pllmull to 9
