@@ -30,7 +30,6 @@ pub fn init(comptime params: struct {
 }
 
 pub fn blink_noreturn(led: LED) noreturn {
-    //core.
     while (true) {
         gpio.write_pin(led.pin, false);
         core.delay_ms(led.off_time);
