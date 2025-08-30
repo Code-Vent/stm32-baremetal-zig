@@ -180,7 +180,10 @@ pub fn init_input_capture(timer: TimerOptions, channel: u8, edge: Edge) void {
         .Rising => ccer.* &= ~(1 << ((channel - 1) * 4 + 1)), // CCxP: Capture/Compare x Polarity
         .Falling => ccer.* |= (1 << ((channel - 1) * 4 + 1)),
         .Both => {
-            // Not directly supported; requires additional configuration
+            // Additional configuration needed for both edges
+            //ccer.* |= (1 << ((channel - 1) * 4 + 1));
+            // STM32 timers do not natively support both edge capture; this
+            // would typically require additional logic in the interrupt handler.
         },
     }
     ccer.* |= (1 << ((channel - 1) * 4)); // CCxE: Capture/Compare x Enable
@@ -195,15 +198,4 @@ pub fn get_input_capture(timer: TimerOptions, channel: u8) u32 {
         else => return 0,
     };
     return ccr.*;
-}
-
-pub fn init() void {
-    const tim = Timer{ .TIM1 = Config{
-        .prescaler = 8000 - 1,
-        .auto_reload = 1000 - 1,
-        .repetition_counter = 0,
-        .clock_division = 0,
-        .counter_mode = .Up,
-    } };
-    start(tim);
 }
