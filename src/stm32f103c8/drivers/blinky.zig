@@ -37,3 +37,13 @@ pub fn blink_noreturn(led: LED) noreturn {
         core.delay_ms(led.on_time);
     }
 }
+
+pub fn blink(led: LED, times: u32) void {
+    var i = times;
+    while (i > 0) : (i -= 1) {
+        gpio.write_pin(led.pin, false);
+        core.delay_ms(led.off_time);
+        gpio.write_pin(led.pin, true);
+        core.delay_ms(led.on_time);
+    }
+}

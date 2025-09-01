@@ -95,6 +95,26 @@ pub fn read_pin(pin: Pin) bool {
     return (idr.* & pin.mask) != 0;
 }
 
-fn enable(comptime bit: u32) void {
+inline fn enable(comptime bit: u32) void {
     core.enable_peripheral(.APB2, 1 << bit);
+}
+
+pub fn toggle_pin(pin: Pin) void {
+    const odr = gpio_reg(pin.port, 0x0C);
+    odr.* ^= pin.mask;
+}
+
+pub fn set_port(port: Port, value: u32) void {
+    const odr = gpio_reg(port, 0x0C);
+    odr.* = value;
+}
+
+pub fn read_port(port: Port) u32 {
+    const idr = gpio_reg(port, 0x08);
+    return idr.*;
+}
+
+pub fn toggle_port(port: Port) void {
+    const odr = gpio_reg(port, 0x0C);
+    odr.* = ~odr.*;
 }
