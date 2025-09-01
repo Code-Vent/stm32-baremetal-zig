@@ -1,5 +1,4 @@
 const mcu = @import("mcu");
-//const startup = @import("startup.zig");
 
 pub export fn _start() void {
     const gpio = mcu.peripherals.gpio;
