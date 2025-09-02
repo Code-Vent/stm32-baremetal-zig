@@ -11,6 +11,7 @@ const Env = struct {
 
 pub fn start(comptime freq_in_MHZ: u8) void {
     const Config = Units.clock.Config;
+    Units.handlers.init();
     Env.clock_freq = Units.clock.start(Config.init(freq_in_MHZ));
 }
 

@@ -71,7 +71,7 @@ export fn Reset_Handler() callconv(.C) void {
     // Enable global interrupts
     asm volatile ("cpsie i");
 
-    main._start();
+    main.entry();
 
     while (true) {}
 }

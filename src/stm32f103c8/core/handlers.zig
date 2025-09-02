@@ -8,3 +8,5 @@ export fn SysTick_Handler() callconv(.C) void {
 export fn SVC_Handler() callconv(.C) void {
     while (true) {}
 }
+
+pub fn init() void {}

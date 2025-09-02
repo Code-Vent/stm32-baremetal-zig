@@ -1,19 +1,19 @@
 const core = @import("../core/core.zig");
 
-pub const Config = struct {
-    prescaler: u16,
-    auto_reload: u16,
-    repetition_counter: u8,
-    clock_division: u2,
-    counter_mode: CounterMode,
-};
-
 pub const CounterMode = enum(u3) {
     Up = 0b00,
     Down = 0b01,
     CenterAligned1 = 0b10,
     CenterAligned2 = 0b11,
     CenterAligned3 = 0b100,
+};
+
+pub const Config = struct {
+    prescaler: u16,
+    auto_reload: u16,
+    repetition_counter: u8,
+    clock_division: u2,
+    counter_mode: CounterMode,
 };
 
 pub const TimerOptions = enum(u32) {
@@ -31,13 +31,9 @@ pub const TimerOptions = enum(u32) {
     TIM7 = 5,
 };
 
-pub const Timer = union(TimerOptions) {
-    TIM1: Config,
-    TIM2: Config,
-    TIM3: Config,
-    TIM4: Config,
-    TIM6: Config,
-    TIM7: Config,
+pub const Timer = struct {
+    tim: TimerOptions,
+    cfg: Config,
 };
 
 fn timer_reg(timer: TimerOptions, offset: u32) *volatile u32 {
@@ -51,61 +47,67 @@ fn timer_reg(timer: TimerOptions, offset: u32) *volatile u32 {
     };
 }
 
-pub fn start(timer: Config) void {
-    if (timer == .TIM1) {
-        core.enable_peripheral(.APB2, 1 << @intFromEnum(timer));
+pub fn start(comptime timer: Timer) void {
+    if (timer.tim == .TIM1) {
+        core.enable_peripheral(.APB2, 1 << @intFromEnum(timer.tim));
     } else {
-        core.enable_peripheral(.APB1, 1 << @intFromEnum(timer));
+        core.enable_peripheral(.APB1, 1 << @intFromEnum(timer.tim));
     }
 
-    const cr1 = timer_reg(timer, 0x00);
-    const psc = timer_reg(timer, 0x28);
-    const arr = timer_reg(timer, 0x2C);
-    const rcr = if (timer == .TIM1) timer_reg(timer, 0x10) else null;
+    const cr1 = timer_reg(timer.tim, 0x00);
+    const psc = timer_reg(timer.tim, 0x28);
+    const arr = timer_reg(timer.tim, 0x2C);
+    const rcr = if (timer.tim == .TIM1) timer_reg(timer.tim, 0x10) else null;
 
     // Disable the counter
     cr1.* = 0;
 
     // Set prescaler
-    psc.* = @as(u32, timer.prescaler);
+    psc.* = @as(u32, timer.cfg.prescaler);
 
     // Set auto-reload value
-    arr.* = @as(u32, timer.auto_reload);
+    arr.* = @as(u32, timer.cfg.auto_reload);
 
     // Set repetition counter if applicable
     if (rcr) |rcr_| {
-        rcr_.* = @as(u32, timer.repetition_counter);
+        rcr_.* = @as(u32, timer.cfg.repetition_counter);
     }
 
     // Set clock division and counter mode
-    cr1.* = (@as(u32, timer.clock_division) << 8) | @as(u32, timer.counter_mode);
+    cr1.* = (@as(u32, timer.cfg.clock_division) << 8) | @as(u32, @intFromEnum(timer.cfg.counter_mode));
 
     // Enable the counter
     cr1.* |= 1;
 }
 
-pub fn stop(timer: TimerOptions) void {
+pub fn stop(comptime timer: TimerOptions) void {
     const cr1 = timer_reg(timer, 0x00);
     cr1.* &= ~1; // Disable the counter
 }
 
-pub fn reset(timer: TimerOptions) void {
+pub fn reset(comptime timer: TimerOptions) void {
     const egr = timer_reg(timer, 0x14);
     egr.* |= 1; // Generate an update event to reset the counter
 }
 
-pub fn get_counter(timer: TimerOptions) u32 {
+pub fn delay(comptime timer: TimerOptions) void {
+    const sr = timer_reg(timer, 0x10);
+    while (sr.* & @as(u32, 1 << 0) == 0) {} // Wait for update event
+    sr.* &= ~@as(u32, 1 << 0); // Clear update flag
+}
+
+pub fn get_counter(comptime timer: TimerOptions) u32 {
     const cnt = timer_reg(timer, 0x24);
     return cnt.*;
 }
 
-pub fn set_counter(timer: TimerOptions, value: u32) void {
+pub fn set_counter(comptime timer: TimerOptions, value: u32) void {
     const cnt = timer_reg(timer, 0x24);
     cnt.* = value;
 }
 
 //PMW
-pub fn init_pwm(timer: TimerOptions, channel: u8) void {
+pub fn init_pwm(comptime timer: TimerOptions, channel: u8) void {
     const ccmr = switch (channel) {
         1 => timer_reg(timer, 0x18),
         2 => timer_reg(timer, 0x1C),
@@ -119,7 +121,7 @@ pub fn init_pwm(timer: TimerOptions, channel: u8) void {
     ccer.* |= (1 << ((channel - 1) * 4));
 }
 
-pub fn set_pwm_duty(timer: TimerOptions, channel: u8, duty: u16) void {
+pub fn set_pwm_duty(comptime timer: TimerOptions, channel: u8, duty: u16) void {
     const ccr = switch (channel) {
         1 => timer_reg(timer, 0x34),
         2 => timer_reg(timer, 0x38),
@@ -130,28 +132,28 @@ pub fn set_pwm_duty(timer: TimerOptions, channel: u8, duty: u16) void {
     ccr.* = @as(u32, duty);
 }
 
-pub fn enable_pmw_outputs(timer: TimerOptions) void {
+pub fn enable_pmw_outputs(comptime timer: TimerOptions) void {
     if (timer == .TIM1) {
         const bdtr = timer_reg(timer, 0x44);
         bdtr.* |= 1 << 15; // MOE: Main Output Enable
     }
 }
 
-pub fn disable_pwm_outputs(timer: TimerOptions) void {
+pub fn disable_pwm_outputs(comptime timer: TimerOptions) void {
     if (timer == .TIM1) {
         const bdtr = timer_reg(timer, 0x44);
         bdtr.* &= ~(1 << 15); // MOE: Main Output Disable
     }
 }
 
-pub fn enable_interrupt(timer: TimerOptions, update: bool) void {
+pub fn enable_interrupt(comptime timer: TimerOptions, update: bool) void {
     const dier = timer_reg(timer, 0x0C);
     if (update) {
         dier.* |= 1; // Enable update interrupt
     }
 }
 
-pub fn disable_interrupt(timer: TimerOptions, update: bool) void {
+pub fn disable_interrupt(comptime timer: TimerOptions, update: bool) void {
     const dier = timer_reg(timer, 0x0C);
     if (update) {
         dier.* &= ~1; // Disable update interrupt
@@ -165,7 +167,7 @@ pub const Edge = enum {
 };
 
 //Input capture
-pub fn init_input_capture(timer: TimerOptions, channel: u8, edge: Edge) void {
+pub fn init_input_capture(comptime timer: TimerOptions, channel: u8, edge: Edge) void {
     const ccmr = switch (channel) {
         1 => timer_reg(timer, 0x18),
         2 => timer_reg(timer, 0x1C),
@@ -189,7 +191,7 @@ pub fn init_input_capture(timer: TimerOptions, channel: u8, edge: Edge) void {
     ccer.* |= (1 << ((channel - 1) * 4)); // CCxE: Capture/Compare x Enable
 }
 
-pub fn get_input_capture(timer: TimerOptions, channel: u8) u32 {
+pub fn get_input_capture(comptime timer: TimerOptions, channel: u8) u32 {
     const ccr = switch (channel) {
         1 => timer_reg(timer, 0x34),
         2 => timer_reg(timer, 0x38),

@@ -47,3 +47,7 @@ pub fn blink(led: LED, times: u32) void {
         core.delay_ms(led.on_time);
     }
 }
+
+pub fn led_toggle(led: LED) void {
+    gpio.toggle_pin(led.pin);
+}
