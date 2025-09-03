@@ -42,6 +42,9 @@ pub const Config = struct {
                 }
             },
         }
+        if (freq > 36_000_000) {
+            cfgr |= (1 << 10);
+        }
         return Config{
             .cr_mask = cr,
             .cfgr_mask = cfgr,
@@ -108,4 +111,13 @@ pub fn start(config: Config) u32 {
     }
 
     return config.clock_freq;
+}
+
+pub fn get_apb1_prescaler() u16 {
+    const cfgr = rcc_reg(0x04);
+    if ((cfgr.* & (1 << 10)) == 0) {
+        return 1;
+    } else {
+        return 2;
+    }
 }

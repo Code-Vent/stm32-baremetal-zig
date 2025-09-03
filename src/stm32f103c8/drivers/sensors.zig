@@ -179,3 +179,11 @@ pub const UltrasonicSensor = struct {
         return (@as(f32, duration) * 0.0343) / 2.0;
     }
 };
+
+// ─────────────────────────────
+// 3. DIGITAL SERIAL (I²C / SPI / 1-WIRE)
+// ─────────────────────────────
+pub const SerialDataSensor = struct {
+    // Placeholder for future implementation
+    _: u8,
+};

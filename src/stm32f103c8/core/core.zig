@@ -5,14 +5,16 @@ const Units = struct {
 };
 
 const Env = struct {
-    pub var clock_freq: u32 = 8_000_000;
+    pub var sys_clock_freq: u32 = 8_000_000;
+    pub var apb1_clock_freq: u32 = 8_000_000;
     pub const systick_ptr: *volatile u32 = &Units.handlers.systick;
 };
 
 pub fn start(comptime freq_in_MHZ: u8) void {
     const Config = Units.clock.Config;
     Units.handlers.init();
-    Env.clock_freq = Units.clock.start(Config.init(freq_in_MHZ));
+    Env.sys_clock_freq = Units.clock.start(Config.init(freq_in_MHZ));
+    Env.apb1_clock_freq = Env.sys_clock_freq / Units.clock.get_apb1_prescaler();
 }
 
 pub fn enable_peripheral(clock: Units.clock.ClockSrc, mask: u32) void {
@@ -32,4 +34,12 @@ pub fn delay_us(time: u32) void {
 inline fn delay(time: u32) void {
     const start_time: u32 = Env.systick_ptr.*;
     while ((Env.systick_ptr.* - start_time) < time) {}
+}
+
+pub fn get_clock_freq() u32 {
+    return Env.sys_clock_freq;
+}
+
+pub fn get_apb1_clock_freq() u32 {
+    return Env.apb1_clock_freq;
 }

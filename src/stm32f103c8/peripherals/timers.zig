@@ -22,17 +22,17 @@ pub const Channel = enum { CH1, CH2, CH3, CH4 };
 
 pub const TimerOptions = enum(u32) {
     //APB2 enable bit for tim1
-    TIM1 = 11,
+    TIM1 = (1 << 11),
     //APB1 enable bit for tim2
-    TIM2 = 0,
+    TIM2 = (1 << 0),
     //APB1 enable bit for tim3
-    TIM3 = 1,
+    TIM3 = (1 << 1),
     //APB1 enable bit for tim4
-    TIM4 = 2,
+    TIM4 = (1 << 2),
     //APB1 enable bit for tim6
-    TIM6 = 4,
+    TIM6 = (1 << 4),
     //APB1 enable bit for tim7
-    TIM7 = 5,
+    TIM7 = (1 << 5),
 };
 
 fn timer_reg(timer: TimerOptions, offset: u32) *volatile u32 {
@@ -46,15 +46,15 @@ fn timer_reg(timer: TimerOptions, offset: u32) *volatile u32 {
     };
 }
 
-fn enable(comptime tim: TimerOptions) void {
+fn enable(tim: TimerOptions) void {
     if (tim == .TIM1) {
-        core.enable_peripheral(.APB2, 1 << @intFromEnum(tim));
+        core.enable_peripheral(.APB2, @intFromEnum(tim));
     } else {
-        core.enable_peripheral(.APB1, 1 << @intFromEnum(tim));
+        core.enable_peripheral(.APB1, @intFromEnum(tim));
     }
 }
 
-pub fn start(comptime arg: struct {
+pub fn start(arg: struct {
     timer: TimerOptions,
     cfg: Config,
 }) void {
@@ -85,35 +85,45 @@ pub fn start(comptime arg: struct {
     cr1.* |= 1;
 }
 
-pub fn stop(comptime timer: TimerOptions) void {
+pub fn stop(timer: TimerOptions) void {
     const cr1 = timer_reg(timer, 0x00);
     cr1.* &= ~1; // Disable the counter
 }
 
-pub fn reset(comptime timer: TimerOptions) void {
+pub fn reset(timer: TimerOptions) void {
     const egr = timer_reg(timer, 0x14);
     egr.* |= 1; // Generate an update event to reset the counter
 }
 
-pub fn wait_for_event(comptime timer: TimerOptions) void {
+pub fn wait_for_event(timer: TimerOptions) void {
     const sr = timer_reg(timer, 0x10);
     while (sr.* & @as(u32, 1 << 0) == 0) {} // Wait for update event
     sr.* &= ~@as(u32, 1 << 0); // Clear update flag
 }
 
-pub fn get_counter(comptime timer: TimerOptions) u32 {
+pub fn get_counter(timer: TimerOptions) u32 {
     const cnt = timer_reg(timer, 0x24);
     return cnt.*;
 }
 
-pub fn set_counter(comptime timer: TimerOptions, value: u32) void {
+pub fn set_counter(timer: TimerOptions, value: u32) void {
     const cnt = timer_reg(timer, 0x24);
     cnt.* = value;
 }
 
 //PMW
-pub fn init_pwm(comptime timer: TimerOptions, channel: u8) void {
-    enable(timer);
+pub fn init_pwm(timer: TimerOptions, channel: u8) void {
+    //Start timer here
+    start(.{
+        .timer = timer,
+        .cfg = .{
+            .prescaler = (core.get_apb1_clock_freq() / 1_000_000) - 1,
+            .auto_reload = 999,
+            .repetition_counter = 0,
+            .clock_division = 0,
+            .counter_mode = .Up,
+        },
+    });
     const ccmr = switch (channel) {
         1 => timer_reg(timer, 0x18),
         2 => timer_reg(timer, 0x1C),
@@ -131,7 +141,7 @@ pub fn init_pwm(comptime timer: TimerOptions, channel: u8) void {
     cr1.* |= 1;
 }
 
-pub fn set_pwm_duty(comptime timer: TimerOptions, channel: u8, duty: u16) void {
+pub fn set_pwm_duty(timer: TimerOptions, channel: u8, duty: u16) void {
     const ccr = switch (channel) {
         1 => timer_reg(timer, 0x34),
         2 => timer_reg(timer, 0x38),
@@ -142,28 +152,28 @@ pub fn set_pwm_duty(comptime timer: TimerOptions, channel: u8, duty: u16) void {
     ccr.* = @as(u32, duty);
 }
 
-pub fn enable_pmw_outputs(comptime timer: TimerOptions) void {
+pub fn enable_pmw_outputs(timer: TimerOptions) void {
     if (timer == .TIM1) {
         const bdtr = timer_reg(timer, 0x44);
         bdtr.* |= 1 << 15; // MOE: Main Output Enable
     }
 }
 
-pub fn disable_pwm_outputs(comptime timer: TimerOptions) void {
+pub fn disable_pwm_outputs(timer: TimerOptions) void {
     if (timer == .TIM1) {
         const bdtr = timer_reg(timer, 0x44);
         bdtr.* &= ~(1 << 15); // MOE: Main Output Disable
     }
 }
 
-pub fn enable_interrupt(comptime timer: TimerOptions, update: bool) void {
+pub fn enable_interrupt(timer: TimerOptions, update: bool) void {
     const dier = timer_reg(timer, 0x0C);
     if (update) {
         dier.* |= 1; // Enable update interrupt
     }
 }
 
-pub fn disable_interrupt(comptime timer: TimerOptions, update: bool) void {
+pub fn disable_interrupt(timer: TimerOptions, update: bool) void {
     const dier = timer_reg(timer, 0x0C);
     if (update) {
         dier.* &= ~1; // Disable update interrupt
@@ -177,8 +187,17 @@ pub const Edge = enum {
 };
 
 //Input capture
-pub fn init_input_capture(comptime timer: TimerOptions, channel: u8, edge: Edge) void {
-    enable(timer);
+pub fn init_input_capture(timer: TimerOptions, channel: u8, edge: Edge) void {
+    start(.{
+        .timer = timer,
+        .cfg = .{
+            .prescaler = (core.get_apb1_clock_freq() / 1_000_000) - 1,
+            .auto_reload = 0xFFFF,
+            .repetition_counter = 0,
+            .clock_division = 0,
+            .counter_mode = .Up,
+        },
+    });
     const ccmr = switch (channel) {
         1 => timer_reg(timer, 0x18),
         2 => timer_reg(timer, 0x1C),
@@ -200,9 +219,6 @@ pub fn init_input_capture(comptime timer: TimerOptions, channel: u8, edge: Edge)
         },
     }
     ccer.* |= (1 << ((channel - 1) * 4)); // CCxE: Capture/Compare x Enable
-    // Enable the counter
-    const cr1 = timer_reg(timer, 0x00);
-    cr1.* |= 1;
 }
 
 pub fn get_input_capture(comptime timer: TimerOptions, channel: u8) u32 {
