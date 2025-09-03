@@ -102,5 +102,10 @@ pub fn start(config: Config) u32 {
     cfgr.* |= (config.cfgr_mask & (1 << 0));
     cfgr.* |= (config.cfgr_mask & (1 << 1));
 
+    //if HSE is ON switch OFF HSI
+    if ((config.cr_mask & @as(u32, 1 << 16)) != 0) {
+        cr.* &= ~@as(u32, 1 << 0); //HSION = 0
+    }
+
     return config.clock_freq;
 }

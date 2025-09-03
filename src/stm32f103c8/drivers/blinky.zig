@@ -7,25 +7,25 @@ pub const LED = struct {
     off_time: u32,
 };
 
-pub fn init(comptime params: struct {
+pub fn init(comptime arg: struct {
     port: gpio.Port,
     pin: u8,
     on_time_Ms: u32,
     off_time_Ms: u32,
 }) LED {
     const cfgs = [_]gpio.Config{
-        gpio.Config.init(params.pin, params.port, .Output50MHz, .Floating_OR_GpioOD, .NONE),
+        gpio.Config.init(arg.pin, arg.port, .Output50MHz, .Floating_OR_GpioOD, .NONE),
     };
 
-    gpio.config_gpio(1, .{params.port}, &cfgs);
+    gpio.config_gpio(1, .{arg.port}, &cfgs);
 
     return LED{
         .pin = gpio.Pin{
-            .port = params.port,
-            .mask = (1 << params.pin),
+            .port = arg.port,
+            .mask = (1 << arg.pin),
         },
-        .on_time = params.on_time_Ms,
-        .off_time = params.off_time_Ms,
+        .on_time = arg.on_time_Ms,
+        .off_time = arg.off_time_Ms,
     };
 }
 

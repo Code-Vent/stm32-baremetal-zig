@@ -10,18 +10,16 @@ pub export fn entry() void {
         .off_time_Ms = 500,
     });
 
-    const timer = mcu.peripherals.timers.Timer{ .tim = .TIM2, .cfg = .{
+    mcu.peripherals.timers.start(.{ .timer = .TIM2, .cfg = .{
         .auto_reload = 499,
         .prescaler = 15999,
         .counter_mode = .Up,
         .clock_division = 0,
         .repetition_counter = 0,
-    } };
-
-    mcu.peripherals.timers.start(timer);
+    } });
 
     while (true) {
         mcu.drivers.blinky.led_toggle(led);
-        mcu.peripherals.timers.delay(timer.tim);
+        mcu.peripherals.timers.wait_for_event(.TIM2);
     }
 }
