@@ -49,7 +49,7 @@ pub const AnalogSensor = struct {
 
     pub fn read(self: *AnalogSensor) u16 {
         _ = self;
-        return 0; //timers.adc_read(self.channel); // assume adc_read is in timers.zig/core
+        return 0;
     }
 };
 
