@@ -222,7 +222,7 @@ pub fn disable_interrupt(timer: Timer, update: bool) void {
 }
 
 //Input capture
-pub fn start_capture_compare(timer: Timer, c: Channel, masks: CaptureCompareMasks) void {
+pub fn start_capture_compare(timer: Timer, c: Channel, masks: CaptureCompareMasks, ccr: ?u16) void {
     config_counter(.{
         .timer = timer,
         .cfg = .{
@@ -243,7 +243,16 @@ pub fn start_capture_compare(timer: Timer, c: Channel, masks: CaptureCompareMask
     egr.* |= masks.egr_mask; // Generate an update event to load the prescaler value
     ccmr.* |= masks.ccmr_mask; // Configure as input, no prescaler
     ccer.* |= masks.ccer_mask; // Enable capture on the channel
-    cr1.* |= (1 << 7);
+    if (ccr) |ccr_| {
+        const ccr_reg = switch (c) {
+            .CH1 => timer_reg(timer, 0x34),
+            .CH2 => timer_reg(timer, 0x38),
+            .CH3 => timer_reg(timer, 0x3C),
+            .CH4 => timer_reg(timer, 0x40),
+        };
+        ccr_reg.* = @as(u32, ccr_);
+    }
+    cr1.* |= (1 << 7); // Enable auto-reload preload
     //Start timer counter here
     start_counter(timer);
 }
