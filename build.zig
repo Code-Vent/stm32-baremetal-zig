@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
-    // Build object file from main.zig
+    // Build object file from startup.zig
     const obj = b.addObject(.{
         .name = "firmware",
         .root_source_file = b.path("src/startup.zig"),
@@ -36,7 +36,6 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install_step.step);
 
     // Post-build: run build.bat after generating ELF
-    // Post build step: run build.bat after linking
     const post = b.addSystemCommand(&.{
         "cmd", "/C", "build.bat",
     });
