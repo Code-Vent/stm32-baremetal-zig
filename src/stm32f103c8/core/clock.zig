@@ -63,7 +63,8 @@ fn rcc_reg(offset: u32) *volatile u32 {
     return @ptrFromInt(0x4002_1000 + offset);
 }
 
-pub fn enable(clock: ClockSrc, mask: u32) void {
+pub fn enable(clock: ClockSrc, bit: u5) void {
+    const mask: u32 = @as(u32, 1) << bit;
     switch (clock) {
         .AHB => {
             const ahb = rcc_reg(0x14);

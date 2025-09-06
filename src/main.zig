@@ -1,14 +1,9 @@
 const mcu = @import("mcu");
+const blink = @import("examples/blink.zig");
 
 pub export fn entry() void {
-    const gpio = mcu.peripherals.gpio;
     mcu.core.start(16);
-    const led = mcu.drivers.blinky.init(.{
-        .port = gpio.Port.C,
-        .pin = 13,
-        .on_time_Ms = 500,
-        .off_time_Ms = 500,
-    });
+    const led = blink.get_built_in_led();
 
     mcu.peripherals.timers.config_counter(.{ .timer = .TIM2, .cfg = .{
         .auto_reload = 499,
@@ -20,7 +15,7 @@ pub export fn entry() void {
     mcu.peripherals.timers.start_counter(.TIM2);
 
     while (true) {
-        mcu.drivers.blinky.led_toggle(led);
+        blink.toggle(led);
         mcu.peripherals.timers.event_wait(.TIM2, .Update);
     }
 }

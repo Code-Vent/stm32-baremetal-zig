@@ -17,17 +17,17 @@ pub fn start(comptime freq_in_MHZ: u8) void {
     Env.apb1_clock_freq = Env.sys_clock_freq / Units.clock.get_apb1_prescaler();
 }
 
-pub fn enable_peripheral(clock: Units.clock.ClockSrc, mask: u32) void {
-    Units.clock.enable(clock, mask);
+pub fn enable_peripheral(clock: Units.clock.ClockSrc, bit: u5) void {
+    Units.clock.enable(clock, bit);
 }
 
 pub fn delay_ms(time: u32) void {
-    Units.sys_timer.init_delay(Env.clock_freq, 1000);
+    Units.sys_timer.init_delay(Env.sys_clock_freq, 1000);
     delay(time);
 }
 
 pub fn delay_us(time: u32) void {
-    Units.sys_timer.init_delay(Env.clock_freq, 1000_000);
+    Units.sys_timer.init_delay(Env.sys_clock_freq, 1000_000);
     delay(time);
 }
 

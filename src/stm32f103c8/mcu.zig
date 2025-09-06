@@ -8,7 +8,8 @@ pub const peripherals = struct {
 };
 
 pub const drivers = struct {
-    pub const blinky = @import("drivers/blinky.zig");
+    pub const actuators = @import("drivers/actuators.zig");
+    pub const sensors = @import("drivers/sensors.zig");
     pub const serial = @import("drivers/serial.zig");
 };
 

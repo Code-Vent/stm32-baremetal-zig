@@ -1,6 +1,11 @@
 const core = @import("../core/core.zig");
 
-pub const Port = enum(u3) { A = 2, B = 3, C = 4, D = 5 };
+pub const Port = enum(u5) {
+    A = 2, //Enable bit for Port A
+    B = 3, //Enable bit for Port B
+    C = 4, //Enable bit for Port C
+    D = 5, //Enable bit for Port D
+};
 
 pub const Mode = enum(u2) {
     Input = 0b00,
@@ -35,14 +40,14 @@ pub const Config = struct {
     _pin: u8,
     _pull: Pull,
 
-    pub fn init(comptime pin: u8, port: Port, mode: Mode, cnf: Cnf, pull: Pull) Config {
-        const index: u32 = @intCast(pin & 0x7); // * 4;
+    pub fn init(pin: u8, port: Port, mode: Mode, cnf: Cnf, pull: Pull) Config {
+        const index: u5 = @intCast(pin & 0x7); // * 4;
         const m: u32 = @intFromEnum(mode);
         const c: u32 = @intFromEnum(cnf);
         return Config{
             ._port = port,
-            .cnf_mode_mask = ((c << 2) | m) << (index * 4),
-            .pupdr_mask = (1 << index),
+            .cnf_mode_mask = ((c << 2) | m) << @as(u5, index * 4),
+            .pupdr_mask = @as(u32, 1) << index,
             ._pin = pin,
             ._pull = pull,
         };
@@ -58,9 +63,9 @@ fn gpio_reg(port: Port, offset: u32) *volatile u32 {
     };
 }
 
-pub fn config_gpio(comptime N: usize, comptime en_list: [N]Port, cfgs: []const Config) void {
-    inline for (en_list, 0..) |_, i| {
-        enable(@intFromEnum(en_list[i]));
+pub fn config_gpio(en_list: []const Port, cfgs: []const Config) void {
+    for (en_list) |port| {
+        core.enable_peripheral(.APB2, @intFromEnum(port));
     }
     for (cfgs) |cfg| {
         const crl = gpio_reg(cfg._port, 0x00);
@@ -93,10 +98,6 @@ pub fn write_pin(pin: Pin, value: bool) void {
 pub fn read_pin(pin: Pin) bool {
     const idr = gpio_reg(pin.port, 0x08);
     return (idr.* & pin.mask) != 0;
-}
-
-inline fn enable(comptime bit: u32) void {
-    core.enable_peripheral(.APB2, 1 << bit);
 }
 
 pub fn toggle_pin(pin: Pin) void {

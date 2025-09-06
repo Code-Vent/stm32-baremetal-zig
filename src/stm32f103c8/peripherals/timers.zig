@@ -2,24 +2,15 @@ const std = @import("std");
 const core = @import("../core/core.zig");
 const afio = @import("afio.zig");
 
-pub const Channel = enum(u8) { CH1 = 1, CH2, CH3, CH4 };
+pub const Channel = enum(u4) { CH1 = 1, CH2, CH3, CH4 };
 
-const EnableMasks = enum(u32) {
-    TIM1 = (1 << 11),
-    TIM2 = (1 << 0),
-    TIM3 = (1 << 1),
-    TIM4 = (1 << 2),
-    TIM6 = (1 << 4),
-    TIM7 = (1 << 5),
-};
-
-pub const Timer = enum {
-    TIM1,
-    TIM2,
-    TIM3,
-    TIM4,
-    TIM6,
-    TIM7,
+pub const Timer = enum(u5) {
+    TIM1 = 11,
+    TIM2 = 0,
+    TIM3 = 1,
+    TIM4 = 2,
+    TIM6 = 4,
+    TIM7 = 5,
 };
 
 pub const CounterMode = enum(u3) {
@@ -48,7 +39,7 @@ pub const EventMasks = enum(u32) {
     Break = 1 << 7,
 };
 
-pub const Edge = enum {
+pub const Edge = enum(u1) {
     Rising,
     Falling,
 };
@@ -70,9 +61,9 @@ pub const CmpConfig = struct {
         PWM1,
         PWM2,
     },
-    preload: enum { DISABLE, ENABLE },
-    fast: enum { DISABLE, ENABLE },
-    active_state: enum { HIGH, LOW },
+    preload: enum(u1) { DISABLE, ENABLE },
+    fast: enum(u1) { DISABLE, ENABLE },
+    active_state: enum(u1) { HIGH, LOW },
 };
 
 pub const CaptureCompareMasks = struct {
@@ -80,19 +71,22 @@ pub const CaptureCompareMasks = struct {
     ccmr_mask: u16,
     ccer_mask: u16,
 
-    pub fn initCapture(comptime cfg: CapConfig) CaptureCompareMasks {
+    pub fn initCapture(cfg: CapConfig) CaptureCompareMasks {
         return .{
-            .egr_mask = 1 << @intFromEnum(cfg.ch),
-            .ccmr_mask = 0x0001 << (((@intFromEnum(cfg.ch) % 2) - 1) * 8),
-            .ccer_mask = ((@intFromEnum(cfg.edge) << 1) | (1 << 0)) << ((@intFromEnum(cfg.ch) - 1) * 4),
+            .egr_mask = @as(u16, 1) << @intFromEnum(cfg.ch),
+            .ccmr_mask = 0x0001 << @as(u4, ((@intFromEnum(cfg.ch) % 2) - 1) * 8),
+            .ccer_mask = (@as(u16, @intFromEnum(cfg.edge) << 1) | @as(u16, 1 << 0)) << @as(u4, (@intFromEnum(cfg.ch) - 1) * 4),
         };
     }
 
-    pub fn initCompare(comptime cfg: CmpConfig) CaptureCompareMasks {
+    pub fn initCompare(cfg: CmpConfig) CaptureCompareMasks {
+        const cmp_out: u8 = @intFromEnum(cfg.cmp_out) << 4;
+        const preload: u8 = @intFromEnum(cfg.preload) << 3;
+        const fast: u8 = @intFromEnum(cfg.fast) << 2;
         return .{
-            .egr_mask = 1 << @intFromEnum(cfg.ch),
-            .ccmr_mask = (@intFromEnum(cfg.cmp_out) << 4 | @intFromEnum(cfg.preload) << 3 | @intFromEnum(cfg.fast) << 2) << (((@intFromEnum(cfg.ch) % 2) - 1) * 8), // configure compare mode as needed
-            .ccer_mask = ((@intFromEnum(cfg.active_state) << 1) | (1 << 0)) << ((@intFromEnum(cfg.ch) - 1) * 4),
+            .egr_mask = @as(u16, 1) << @intFromEnum(cfg.ch),
+            .ccmr_mask = (cmp_out | preload | fast) << @as(u8, ((@intFromEnum(cfg.ch) % 2) - 1) * 8), // configure compare mode as needed
+            .ccer_mask = @as(u2, (@intFromEnum(cfg.active_state) << 1) | (1 << 0)) << @as(u4, (@intFromEnum(cfg.ch) - 1) * 4),
         };
     }
 };
@@ -110,12 +104,8 @@ fn timer_reg(timer: Timer, offset: u32) *volatile u32 {
 
 fn enable(timer: Timer) void {
     switch (timer) {
-        .TIM1 => core.enable_peripheral(.APB2, @intFromEnum(EnableMasks.TIM1)),
-        .TIM2 => core.enable_peripheral(.APB1, @intFromEnum(EnableMasks.TIM2)),
-        .TIM3 => core.enable_peripheral(.APB1, @intFromEnum(EnableMasks.TIM3)),
-        .TIM4 => core.enable_peripheral(.APB1, @intFromEnum(EnableMasks.TIM4)),
-        .TIM6 => core.enable_peripheral(.APB1, @intFromEnum(EnableMasks.TIM6)),
-        .TIM7 => core.enable_peripheral(.APB1, @intFromEnum(EnableMasks.TIM7)),
+        .TIM1 => core.enable_peripheral(.APB2, @intFromEnum(timer)),
+        else => core.enable_peripheral(.APB1, @intFromEnum(timer)),
     }
 }
 
@@ -221,7 +211,6 @@ pub fn disable_interrupt(timer: Timer, update: bool) void {
     }
 }
 
-//Input capture
 pub fn start_capture_compare(timer: Timer, c: Channel, masks: CaptureCompareMasks, ccr: ?u16) void {
     config_counter(.{
         .timer = timer,
@@ -257,7 +246,7 @@ pub fn start_capture_compare(timer: Timer, c: Channel, masks: CaptureCompareMask
     start_counter(timer);
 }
 
-pub fn get_input_capture(comptime timer: Timer, channel: u8) u32 {
+pub fn get_input_capture(timer: Timer, channel: u4) u32 {
     const ccr = switch (channel) {
         1 => timer_reg(timer, 0x34),
         2 => timer_reg(timer, 0x38),

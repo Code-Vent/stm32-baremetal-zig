@@ -13,11 +13,15 @@ const SensorPin = struct {
 pub const DigitalSensor = struct {
     pin: gpio.Pin,
 
-    pub fn init(comptime in: SensorPin) DigitalSensor {
+    pub fn init(in: SensorPin) DigitalSensor {
         const cfgs = [_]gpio.Config{
             gpio.Config.init(in.pin.num, in.pin.port, .Input, .Input_OR_AltPP, in.pull),
         };
-        gpio.config_gpio(1, .{in.pin.port}, &cfgs);
+
+        const ports = [_]gpio.Port{
+            in.pin.port,
+        };
+        gpio.config_gpio(&ports, &cfgs);
 
         return DigitalSensor{
             .pin = gpio.Pin{
