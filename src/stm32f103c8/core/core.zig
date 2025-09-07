@@ -13,8 +13,9 @@ const Env = struct {
 pub fn start(comptime freq_in_MHZ: u8) void {
     const Config = Units.clock.Config;
     Units.handlers.init();
-    Env.sys_clock_freq = Units.clock.start(Config.init(freq_in_MHZ));
-    Env.apb1_clock_freq = Env.sys_clock_freq / Units.clock.get_apb1_prescaler();
+    const freqs = Units.clock.start(Config.init(freq_in_MHZ));
+    Env.sys_clock_freq = freqs.sys_clock_freq;
+    Env.apb1_clock_freq = freqs.apb1_freq;
 }
 
 pub fn enable_peripheral(clock: Units.clock.ClockSrc, bit: u5) void {

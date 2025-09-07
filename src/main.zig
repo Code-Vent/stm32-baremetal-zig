@@ -2,12 +2,12 @@ const mcu = @import("mcu");
 const blink = @import("examples/blink.zig");
 
 pub export fn entry() void {
-    mcu.core.start(16);
+    mcu.core.start(64);
     const led = blink.get_built_in_led();
 
     mcu.peripherals.timers.config_counter(.{ .timer = .TIM2, .cfg = .{
         .auto_reload = 499,
-        .prescaler = 15999,
+        .prescaler = 63999,
         .counter_mode = .Up,
         .clock_division = 0,
         .repetition_counter = 0,

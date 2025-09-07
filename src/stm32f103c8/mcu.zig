@@ -2,7 +2,7 @@ pub const core = @import("core/core.zig");
 
 pub const peripherals = struct {
     pub const gpio = @import("peripherals/gpio.zig");
-    pub const afio = @import("peripherals/afio.zig").init;
+    pub const afio = @import("peripherals/afio.zig");
     pub const uart = @import("peripherals/uart.zig");
     pub const timers = @import("peripherals/timers.zig");
 };

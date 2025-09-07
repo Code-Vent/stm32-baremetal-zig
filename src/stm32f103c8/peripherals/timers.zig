@@ -21,7 +21,7 @@ pub const CounterMode = enum(u3) {
     CenterAligned3 = 0b100,
 };
 
-pub const Config = struct {
+pub const CounterConfig = struct {
     prescaler: u16,
     auto_reload: u16,
     repetition_counter: u8,
@@ -111,7 +111,7 @@ fn enable(timer: Timer) void {
 
 pub fn config_counter(arg: struct {
     timer: Timer,
-    cfg: Config,
+    cfg: CounterConfig,
 }) void {
     enable(arg.timer);
     const cr1 = timer_reg(arg.timer, 0x00);
@@ -172,6 +172,11 @@ pub fn set_counter(timer: Timer, value: u32) void {
     cnt.* = value;
 }
 
+pub fn set_auto_reload(timer: Timer, value: u16) void {
+    const arr = timer_reg(timer, 0x2C);
+    arr.* = @as(u32, value);
+}
+
 pub fn set_pwm_duty(timer: Timer, channel: u8, duty: u16) void {
     const ccr = switch (channel) {
         1 => timer_reg(timer, 0x34),
@@ -211,16 +216,10 @@ pub fn disable_interrupt(timer: Timer, update: bool) void {
     }
 }
 
-pub fn start_capture_compare(timer: Timer, c: Channel, masks: CaptureCompareMasks, ccr: ?u16) void {
+pub fn start_capture_compare(timer: Timer, c: Channel, cfg: CounterConfig, masks: CaptureCompareMasks, duty: ?u16) void {
     config_counter(.{
         .timer = timer,
-        .cfg = .{
-            .prescaler = (core.get_apb1_clock_freq() / 1_000_000) - 1,
-            .auto_reload = 0xFFFF,
-            .repetition_counter = 0,
-            .clock_division = 0,
-            .counter_mode = .Up,
-        },
+        .cfg = cfg,
     });
     const cr1 = timer_reg(timer, 0x00);
     const egr = timer_reg(timer, 0x14);
@@ -232,18 +231,28 @@ pub fn start_capture_compare(timer: Timer, c: Channel, masks: CaptureCompareMask
     egr.* |= masks.egr_mask; // Generate an update event to load the prescaler value
     ccmr.* |= masks.ccmr_mask; // Configure as input, no prescaler
     ccer.* |= masks.ccer_mask; // Enable capture on the channel
-    if (ccr) |ccr_| {
+    if (duty) |d| {
         const ccr_reg = switch (c) {
             .CH1 => timer_reg(timer, 0x34),
             .CH2 => timer_reg(timer, 0x38),
             .CH3 => timer_reg(timer, 0x3C),
             .CH4 => timer_reg(timer, 0x40),
         };
-        ccr_reg.* = @as(u32, ccr_);
+        ccr_reg.* = @as(u32, d);
     }
     cr1.* |= (1 << 7); // Enable auto-reload preload
     //Start timer counter here
     start_counter(timer);
+}
+
+pub fn remap_timer(timer: Timer, remap: afio.Remap) void {
+    afio.init();
+    switch (timer) {
+        .TIM2 => afio.timer2_remap(remap),
+        .TIM3 => afio.timer3_remap(remap),
+        .TIM4 => afio.timer4_remap(remap),
+        else => {},
+    }
 }
 
 pub fn get_input_capture(timer: Timer, channel: u4) u32 {

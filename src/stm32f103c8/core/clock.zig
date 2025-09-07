@@ -1,13 +1,16 @@
 pub const Config = struct {
     cr_mask: u32,
     cfgr_mask: u32,
-    clock_freq: u32,
+    sys_clock_freq: u32,
+    apb1_freq: u32,
 
     pub fn init(comptime freq_in_MHz: u8) Config {
         const mul = @as(u32, freq_in_MHz >> 2);
         var cr: u32 = 0x83;
         var cfgr: u32 = 0x00;
         var freq: u32 = 0;
+        var apb1_freq: u32 = 0;
+
         switch (mul) {
             0...1 => {
                 //4MHz => Use HSE divide by 2
@@ -44,11 +47,15 @@ pub const Config = struct {
         }
         if (freq > 36_000_000) {
             cfgr |= (1 << 10);
+            apb1_freq = freq / 2;
+        } else {
+            apb1_freq = freq;
         }
         return Config{
             .cr_mask = cr,
             .cfgr_mask = cfgr,
-            .clock_freq = freq,
+            .sys_clock_freq = freq,
+            .apb1_freq = apb1_freq,
         };
     }
 };
@@ -81,7 +88,10 @@ pub fn enable(clock: ClockSrc, bit: u5) void {
     }
 }
 
-pub fn start(config: Config) u32 {
+pub fn start(config: Config) struct {
+    sys_clock_freq: u32,
+    apb1_freq: u32,
+} {
     const cr = rcc_reg(0x00);
     const cfgr = rcc_reg(0x04);
 
@@ -111,7 +121,10 @@ pub fn start(config: Config) u32 {
         cr.* &= ~@as(u32, 1 << 0); //HSION = 0
     }
 
-    return config.clock_freq;
+    return .{
+        .sys_clock_freq = config.sys_clock_freq,
+        .apb1_freq = config.apb1_freq,
+    };
 }
 
 pub fn get_apb1_prescaler() u16 {
