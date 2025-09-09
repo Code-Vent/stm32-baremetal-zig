@@ -5,6 +5,8 @@ pub const peripherals = struct {
     pub const afio = @import("peripherals/afio.zig");
     pub const uart = @import("peripherals/uart.zig");
     pub const timers = @import("peripherals/timers.zig");
+    pub const spi = @import("peripherals/spi.zig");
+    pub const i2c = @import("peripherals/i2c.zig");
 };
 
 pub const drivers = struct {

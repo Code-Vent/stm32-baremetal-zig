@@ -72,21 +72,30 @@ pub const CaptureCompareMasks = struct {
     ccer_mask: u16,
 
     pub fn initCapture(cfg: CapConfig) CaptureCompareMasks {
+        const ch = @intFromEnum(cfg.ch);
+        const ccmr_shift = if (ch == 2 or ch == 4) 8 else 0;
+        const ccer_mask = (@as(u16, @intFromEnum(cfg.edge)) << 1) | (@as(u16, 1) << 0);
+        const ccer_shif = @as(u4, (@intFromEnum(cfg.ch) - 1) * 4);
         return .{
             .egr_mask = @as(u16, 1) << @intFromEnum(cfg.ch),
-            .ccmr_mask = 0x0001 << @as(u4, ((@intFromEnum(cfg.ch) % 2) - 1) * 8),
-            .ccer_mask = (@as(u16, @intFromEnum(cfg.edge) << 1) | @as(u16, 1 << 0)) << @as(u4, (@intFromEnum(cfg.ch) - 1) * 4),
+            .ccmr_mask = 0x0001 << ccmr_shift,
+            .ccer_mask = ccer_mask << ccer_shif,
         };
     }
 
     pub fn initCompare(cfg: CmpConfig) CaptureCompareMasks {
-        const cmp_out: u8 = @intFromEnum(cfg.cmp_out) << 4;
-        const preload: u8 = @intFromEnum(cfg.preload) << 3;
-        const fast: u8 = @intFromEnum(cfg.fast) << 2;
+        const cmp_out = @as(u16, @intFromEnum(cfg.cmp_out)) << 4;
+        const preload = @as(u16, @intFromEnum(cfg.preload)) << 3;
+        const fast = @as(u16, @intFromEnum(cfg.fast)) << 2;
+        const ch = @intFromEnum(cfg.ch);
+        const ccmr_shift: u4 = if (ch == 2 or ch == 4) 8 else 0;
+
+        const ccer_mask = (@as(u16, @intFromEnum(cfg.active_state)) << 1) | (@as(u16, 1) << 0);
+        const ccer_shif = @as(u4, (@intFromEnum(cfg.ch) - 1) * 4);
         return .{
             .egr_mask = @as(u16, 1) << @intFromEnum(cfg.ch),
-            .ccmr_mask = (cmp_out | preload | fast) << @as(u8, ((@intFromEnum(cfg.ch) % 2) - 1) * 8), // configure compare mode as needed
-            .ccer_mask = @as(u2, (@intFromEnum(cfg.active_state) << 1) | (1 << 0)) << @as(u4, (@intFromEnum(cfg.ch) - 1) * 4),
+            .ccmr_mask = @intCast((cmp_out | preload | fast) << ccmr_shift), // configure compare mode as needed
+            .ccer_mask = @intCast(ccer_mask << ccer_shif),
         };
     }
 };
@@ -217,6 +226,7 @@ pub fn disable_interrupt(timer: Timer, update: bool) void {
 }
 
 pub fn start_capture_compare(timer: Timer, c: Channel, cfg: CounterConfig, masks: CaptureCompareMasks, duty: ?u16) void {
+    afio.init();
     config_counter(.{
         .timer = timer,
         .cfg = cfg,
@@ -246,7 +256,6 @@ pub fn start_capture_compare(timer: Timer, c: Channel, cfg: CounterConfig, masks
 }
 
 pub fn remap_timer(timer: Timer, remap: afio.Remap) void {
-    afio.init();
     switch (timer) {
         .TIM2 => afio.timer2_remap(remap),
         .TIM3 => afio.timer3_remap(remap),
@@ -266,100 +275,35 @@ pub fn get_input_capture(timer: Timer, channel: u4) u32 {
     return ccr.*;
 }
 
-/// Define PWM-capable pins per timer
-const timer_map = .{
+pub const timer_map = .{
     .TIM1 = .{
-        .CH1 = .{.{ .port = .A, .num = 8 }},
-        .CH2 = .{.{ .port = .A, .num = 9 }},
-        .CH3 = .{.{ .port = .A, .num = 10 }},
-        .CH4 = .{.{ .port = .A, .num = 11 }},
+        .CH1 = .{ .{ .port = .A, .num = 8 }, .{ .port = .A, .num = 8 }, .{ .port = .A, .num = 8 } },
+        .CH2 = .{ .{ .port = .A, .num = 9 }, .{ .port = .A, .num = 9 }, .{ .port = .A, .num = 9 } },
+        .CH3 = .{ .{ .port = .A, .num = 10 }, .{ .port = .A, .num = 10 }, .{ .port = .A, .num = 10 } },
+        .CH4 = .{ .{ .port = .A, .num = 11 }, .{ .port = .A, .num = 11 }, .{ .port = .A, .num = 11 } },
     },
     .TIM2 = .{
-        .CH1 = .{.{ .port = .A, .num = 0 }},
-        .CH2 = .{.{ .port = .A, .num = 1 }},
-        .CH3 = .{.{ .port = .A, .num = 2 }},
-        .CH4 = .{.{ .port = .A, .num = 3 }},
+        .CH1 = .{ .{ .port = .A, .num = 0 }, .{ .port = .A, .num = 15 }, .{ .port = .A, .num = 15 } },
+        .CH2 = .{ .{ .port = .A, .num = 1 }, .{ .port = .B, .num = 3 }, .{ .port = .B, .num = 3 } },
+        .CH3 = .{ .{ .port = .A, .num = 2 }, .{ .port = .A, .num = 2 }, .{ .port = .B, .num = 10 } },
+        .CH4 = .{ .{ .port = .A, .num = 3 }, .{ .port = .A, .num = 3 }, .{ .port = .B, .num = 11 } },
     },
     .TIM3 = .{
-        .CH1 = .{.{ .port = .A, .num = 6 }},
-        .CH2 = .{.{ .port = .A, .num = 7 }},
-        .CH3 = .{.{ .port = .B, .num = 0 }},
-        .CH4 = .{.{ .port = .B, .num = 1 }},
+        .CH1 = .{ .{ .port = .A, .num = 6 }, .{ .port = .B, .num = 4 }, .{ .port = .C, .num = 6 } },
+        .CH2 = .{ .{ .port = .A, .num = 7 }, .{ .port = .B, .num = 5 }, .{ .port = .C, .num = 7 } },
+        .CH3 = .{ .{ .port = .B, .num = 0 }, .{ .port = .B, .num = 0 }, .{ .port = .C, .num = 8 } },
+        .CH4 = .{ .{ .port = .B, .num = 1 }, .{ .port = .B, .num = 1 }, .{ .port = .C, .num = 9 } },
     },
     .TIM4 = .{
-        .CH1 = .{.{ .port = .B, .num = 6 }},
-        .CH2 = .{.{ .port = .B, .num = 7 }},
-        .CH3 = .{.{ .port = .B, .num = 8 }},
-        .CH4 = .{.{ .port = .B, .num = 9 }},
-    },
-};
-
-const timer_partial_remap = .{
-    .TIM2 = .{
-        .CH1 = .{.{ .port = .A, .num = 15 }},
-        .CH2 = .{.{ .port = .B, .num = 3 }},
-        .CH3 = .{.{ .port = .A, .num = 2 }},
-        .CH4 = .{.{ .port = .A, .num = 3 }},
-    },
-    .TIM3 = .{
-        .CH1 = .{.{ .port = .B, .num = 4 }},
-        .CH2 = .{.{ .port = .B, .num = 5 }},
-        .CH3 = .{.{ .port = .B, .num = 0 }},
-        .CH4 = .{.{ .port = .B, .num = 1 }},
-    },
-    .TIM4 = .{
-        .CH1 = .{.{ .port = .B, .num = 6 }},
-        .CH2 = .{.{ .port = .B, .num = 7 }},
-        .CH3 = .{.{ .port = .B, .num = 8 }},
-        .CH4 = .{.{ .port = .B, .num = 9 }},
-    },
-};
-
-const timer_full_remap = .{
-    .TIM2 = .{
-        .CH1 = .{.{ .port = .A, .num = 15 }},
-        .CH2 = .{.{ .port = .B, .num = 3 }},
-        .CH3 = .{.{ .port = .B, .num = 10 }},
-        .CH4 = .{.{ .port = .B, .num = 11 }},
-    },
-    .TIM3 = .{
-        .CH1 = .{.{ .port = .C, .num = 6 }},
-        .CH2 = .{.{ .port = .C, .num = 7 }},
-        .CH3 = .{.{ .port = .C, .num = 8 }},
-        .CH4 = .{.{ .port = .C, .num = 9 }},
-    },
-    .TIM4 = .{
-        .CH1 = .{.{ .port = .D, .num = 12 }},
-        .CH2 = .{.{ .port = .D, .num = 13 }},
-        .CH3 = .{.{ .port = .D, .num = 14 }},
-        .CH4 = .{.{ .port = .D, .num = 15 }},
+        .CH1 = .{ .{ .port = .B, .num = 6 }, .{ .port = .B, .num = 6 }, .{ .port = .D, .num = 12 } },
+        .CH2 = .{ .{ .port = .B, .num = 7 }, .{ .port = .B, .num = 7 }, .{ .port = .D, .num = 13 } },
+        .CH3 = .{ .{ .port = .B, .num = 8 }, .{ .port = .B, .num = 8 }, .{ .port = .D, .num = 14 } },
+        .CH4 = .{ .{ .port = .B, .num = 9 }, .{ .port = .B, .num = 9 }, .{ .port = .D, .num = 15 } },
     },
 };
 
 pub fn assertTimerCompatible(comptime p: afio.Pin, comptime t: Timer, comptime c: Channel) void {
     const ch_pins = @field(@field(timer_map, @tagName(t)), @tagName(c));
-
-    inline for (ch_pins) |valid_pin| {
-        if (valid_pin.port == p.port and valid_pin.num == p.num) return;
-    }
-
-    @compileError("Pin " ++ @tagName(p.port) ++ std.fmt.comptimePrint("{d}", .{p.num}) ++
-        " is not valid for " ++ @tagName(t) ++ " " ++ @tagName(c));
-}
-
-pub fn assertTimerPartialRemapCompatible(comptime p: afio.Pin, comptime t: Timer, comptime c: Channel) void {
-    const ch_pins = @field(@field(timer_partial_remap, @tagName(t)), @tagName(c));
-
-    inline for (ch_pins) |valid_pin| {
-        if (valid_pin.port == p.port and valid_pin.num == p.num) return;
-    }
-
-    @compileError("Pin " ++ @tagName(p.port) ++ std.fmt.comptimePrint("{d}", .{p.num}) ++
-        " is not valid for " ++ @tagName(t) ++ " " ++ @tagName(c));
-}
-
-pub fn assertTimerFullRemapCompatible(comptime p: afio.Pin, comptime t: Timer, comptime c: Channel) void {
-    const ch_pins = @field(@field(timer_full_remap, @tagName(t)), @tagName(c));
 
     inline for (ch_pins) |valid_pin| {
         if (valid_pin.port == p.port and valid_pin.num == p.num) return;

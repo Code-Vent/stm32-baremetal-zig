@@ -72,53 +72,58 @@ pub const TempSensor = AnalogSensor;
 pub const TimeIntervalSensor = struct {
     echo: gpio.Pin,
     trig: ?gpio.Pin,
-    channel: u8,
+    channel: timers.Channel,
     timer: Timer,
 
-    pub fn init(comptime timer: Timer, comptime echo: SensorPin, comptime echo_channel: timers.Channel, comptime trig: ?SensorPin, comptime remap: afio.Remap) TimeIntervalSensor {
-        switch (remap) {
-            .NO_REMAP => {
-                timers.assertTimerCompatible(echo.pin, timer, echo_channel);
-            },
-            .PARTIAL_REMAP => {
-                timers.assertTimerPartialRemapCompatible(echo.pin, timer, echo_channel);
-                timers.remap_timer(timer, remap);
-            },
-            .FULL_REMAP => {
-                timers.assertTimerFullRemapCompatible(echo.pin, timer, echo_channel);
-                timers.remap_timer(timer, remap);
-            },
-        }
+    pub fn init(comptime timer: Timer, comptime echo_channel: timers.Channel, comptime trig: ?afio.Pin, comptime remap: afio.Remap) TimeIntervalSensor {
+        const map = switch (timer) {
+            .TIM1 => timers.timer_map.TIM1,
+            .TIM2 => timers.timer_map.TIM2,
+            .TIM3 => timers.timer_map.TIM3,
+            .TIM4 => timers.timer_map.TIM4,
+            else => {},
+        };
+        const options = switch (echo_channel) {
+            .CH1 => map.CH1,
+            .CH2 => map.CH2,
+            .CH3 => map.CH3,
+            .CH4 => map.CH4,
+        };
+        const option = options[@intFromEnum(remap)];
 
         const echo_cfg = [_]gpio.Config{
-            gpio.Config.init(echo.pin.num, echo.pin.port, .Input, .Input_OR_AltPP, echo.pull),
+            gpio.Config.init(option.num, option.port, .Input, .Input_OR_AltPP, .DOWN),
         };
-        gpio.config_gpio(1, .{echo.pin.port}, &echo_cfg);
+        gpio.config_gpio(1, .{option.port}, &echo_cfg);
 
         if (trig != null) {
             const trig_cfg = [_]gpio.Config{
-                gpio.Config.init(trig.?.pin.num, trig.?.pin.port, .Output50MHz, .PushPull_OR_AltPP, trig.?.pull),
+                gpio.Config.init(trig.?.num, trig.?.port, .Output50MHz, .PushPull_OR_AltPP, null),
             };
-            gpio.config_gpio(1, .{trig.?.pin.port}, &trig_cfg);
+            gpio.config_gpio(1, .{trig.?.port}, &trig_cfg);
         }
 
         const echo_pin = gpio.Pin{
-            .port = echo.pin.port,
-            .mask = (1 << echo.pin.num),
+            .port = option.port,
+            .mask = (1 << option.num),
         };
 
         if (trig == null) {
             return TimeIntervalSensor{
                 .trig = null,
                 .echo = echo_pin,
+                .channel = echo_channel,
+                .timer = timer,
             };
         } else {
             return TimeIntervalSensor{
                 .trig = gpio.Pin{
-                    .port = trig.port,
-                    .mask = (1 << trig.?.pin.num),
+                    .port = trig.?.port,
+                    .mask = (1 << trig.?.num),
                 },
                 .echo = echo_pin,
+                .channel = echo_channel,
+                .timer = timer,
             };
         }
     }
@@ -172,8 +177,8 @@ pub const TimeIntervalSensor = struct {
 pub const UltrasonicSensor = struct {
     base: TimeIntervalSensor,
 
-    pub fn init(comptime timer: Timer, comptime echo: SensorPin, comptime echo_channel: timers.Channel, comptime trig: SensorPin, comptime remap: afio.Remap) UltrasonicSensor {
-        return .{ .base = TimeIntervalSensor.init(timer, echo, echo_channel, trig, remap) };
+    pub fn init(comptime timer: Timer, comptime echo_channel: timers.Channel, comptime trig: ?afio.Pin, comptime remap: afio.Remap) UltrasonicSensor {
+        return .{ .base = TimeIntervalSensor.init(timer, echo_channel, trig, remap) };
     }
 
     pub fn read_distance_cm(self: UltrasonicSensor) f32 {

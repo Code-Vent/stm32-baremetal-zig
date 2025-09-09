@@ -30,36 +30,33 @@ pub const PWM = struct {
     timer: timers.Timer,
     channel: timers.Channel,
 
-    pub fn init(
-        pin: afio.Pin,
-        timer: timers.Timer,
-        channel: timers.Channel,
-        remap: afio.Remap,
-    ) PWM {
-        switch (remap) {
-            .NO_REMAP => {
-                timers.assertTimerCompatible(pin, timer, channel);
-            },
-            .PARTIAL_REMAP => {
-                timers.assertTimerPartialRemapCompatible(pin, timer, channel);
-                timers.remap_timer(timer, remap);
-            },
-            .FULL_REMAP => {
-                timers.assertTimerFullRemapCompatible(pin, timer, channel);
-                timers.remap_timer(timer, remap);
-            },
-        }
+    pub fn init(comptime timer: Timer, comptime channel: timers.Channel, comptime remap: afio.Remap) PWM {
+        const map = switch (timer) {
+            .TIM1 => timers.timer_map.TIM1,
+            .TIM2 => timers.timer_map.TIM2,
+            .TIM3 => timers.timer_map.TIM3,
+            .TIM4 => timers.timer_map.TIM4,
+            else => {},
+        };
+        const options = switch (channel) {
+            .CH1 => map.CH1,
+            .CH2 => map.CH2,
+            .CH3 => map.CH3,
+            .CH4 => map.CH4,
+        };
+        const option = options[@intFromEnum(remap)];
+
         const cfgs = [_]gpio.Config{
-            gpio.Config.init(pin.num, pin.port, .Output50MHz, .Input_OR_AltPP, .NONE),
+            gpio.Config.init(option.num, option.port, .Output50MHz, .Input_OR_AltPP, .NONE),
         };
         const ports = [_]gpio.Port{
-            pin.port,
+            option.port,
         };
         gpio.config_gpio(&ports, &cfgs);
 
-        const apb1_freq = core.Env.apb1_clock_freq * clock.get_apb1_prescaler();
+        const apb1_freq = core.get_apb1_clock_freq() * clock.get_apb1_prescaler();
 
-        const prescaler = apb1_freq / 1_000_000 - 1; // 1 MHz timer clock
+        const prescaler: u16 = @intCast((apb1_freq / 1_000_000) - 1); // 1 MHz timer clock
         const counter_cfg = timers.CounterConfig{
             .auto_reload = 999,
             .prescaler = prescaler,
@@ -74,7 +71,7 @@ pub const PWM = struct {
             .preload = .ENABLE,
             .active_state = .HIGH,
         };
-        const cmp_masks = timers.CaptureCompareMasks.initCompare(&cmp_cfg);
+        const cmp_masks = timers.CaptureCompareMasks.initCompare(cmp_cfg);
 
         timers.start_capture_compare(timer, channel, counter_cfg, cmp_masks, 500);
 
@@ -96,5 +93,20 @@ pub const PWM = struct {
 
     pub fn stop(self: PWM) void {
         timers.stop(self.timer);
+    }
+};
+
+pub const Dimmer = struct {
+    base: PWM,
+
+    pub fn init(comptime timer: Timer, comptime channel: timers.Channel, comptime remap: afio.Remap) Dimmer {
+        const base = PWM.init(timer, channel, remap);
+        return Dimmer{
+            .base = base,
+        };
+    }
+
+    pub fn set_brightness(self: Dimmer, percent: u8) void {
+        self.base.set_duty_cycle(percent);
     }
 };
