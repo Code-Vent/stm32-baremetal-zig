@@ -1,13 +1,21 @@
+const std = @import("std");
 const core = @import("../core/core.zig");
+const afio = @import("afio.zig");
+const gpio = @import("gpio.zig");
 
 pub fn init() void {}
 
 //Write Uart api and functionalities following the patterns
 //of gpio.zig and timer.zig
 pub const Uart = enum(u8) {
-    USART1 = 14,
-    USART2 = 17,
-    USART3 = 18,
+    UART1 = 14,
+    UART2 = 17,
+    UART3 = 18,
+};
+
+pub const UartPins = enum {
+    TX,
+    RX,
 };
 
 pub const BaudRate = enum(u32) {
@@ -18,9 +26,59 @@ pub const BaudRate = enum(u32) {
     BR115200 = 115200,
 };
 
-pub const Config = struct {
-    uart: Uart,
+pub const UartConfig = struct {
     baud_rate: BaudRate,
+    transmitter: enum(u1) {
+        DISABLE = 0,
+        ENABLE = 1,
+    },
+    receiver: enum(u1) {
+        DISABLE = 0,
+        ENABLE = 1,
+    },
+    data_bits: enum(u1) {
+        EIGHT = 0,
+        NINE = 1,
+    },
+    parity: enum(u2) {
+        NONE = 0,
+        EVEN = 1,
+        ODD = 2,
+    },
+    stop_bits: enum(u2) {
+        ONE = 0,
+        HALF = 1,
+        TWO = 2,
+        ONE_AND_HALF = 3,
+    },
+};
+
+pub const UartConfigMasks = struct {
+    cr1_mask: u32,
+    cr2_mask: u32,
+    brr: u32,
+
+    pub fn init(cfg: UartConfig) UartConfigMasks {
+        var cr1: u32 = 0;
+        var cr2: u32 = 0;
+        var brr: u32 = 0;
+
+        // Configure CR1
+        cr1 |= @as(u32, @intFromEnum(cfg.transmitter)) << 3; // TE bit
+        cr1 |= @as(u32, @intFromEnum(cfg.receiver)) << 2; // RE bit
+        cr1 |= @as(u32, @intFromEnum(cfg.data_bits)) << 12; // M bit
+        cr1 |= @as(u32, @intFromEnum(cfg.parity)) << 9; // PCE and PS bits
+
+        // Configure CR2
+        cr2 |= @as(u32, @intFromEnum(cfg.stop_bits)) << 12; // STOP bits
+        // Configure BRR
+        brr = @as(u32, @intFromEnum(cfg.baud_rate)); // Baud rate
+        return UartConfigMasks{
+            .cr1_mask = cr1,
+            .cr2_mask = cr2,
+            .brr = brr,
+        };
+    }
 };
 
 fn uart_reg(uart: Uart, offset: u32) *volatile u32 {
@@ -31,27 +89,56 @@ fn uart_reg(uart: Uart, offset: u32) *volatile u32 {
     };
 }
 
-pub fn config_uart(comptime N: usize, comptime en_list: [N]Uart, cfgs: []const Config) void {
-    inline for (en_list, 0..) |_, i| {
-        enable(@intFromEnum(en_list[i]));
-    }
-    for (cfgs) |cfg| {
-        const cr1 = uart_reg(cfg.uart, 0x0C);
-        const brr = uart_reg(cfg.uart, 0x08);
-
-        // Configure baud rate
-        brr.* = @intFromEnum(cfg.baud_rate);
-
-        // Enable USART, TE and RE
-        cr1.* |= (1 << 13) | (1 << 3) | (1 << 2);
+fn enable(uart: Uart) void {
+    switch (uart) {
+        .USART1 => core.enable_peripheral(.APB2, @intFromEnum(uart)),
+        else => core.enable_peripheral(.APB1, @intFromEnum(uart)),
     }
 }
 
-fn enable(comptime uart: Uart) void {
+pub fn config_uart(uart: Uart, cfg: UartConfigMasks, remap: afio.Remap) void {
+    //Configure GPIO pins
+    const uart_pins = switch (uart) {
+        .UART1 => uart_map.UART1,
+        .UART2 => uart_map.UART2,
+        .UART3 => uart_map.UART3,
+    };
+
+    const tx = uart_pins.TX[@intFromEnum(remap)];
+    const rx = uart_pins.RX[@intFromEnum(remap)];
+
+    const cfgs = [_]gpio.Config{
+        gpio.Config.init(tx.num, tx.port, .Output50MHz, .Input_OR_AltPP, .NONE),
+        gpio.Config.init(rx.num, rx.port, .Input, .Floating_OR_GpioOD, .NONE),
+    };
+    const ports = [_]gpio.Port{
+        tx.port,
+        rx.port,
+    };
+    gpio.config_gpio(&ports, &cfgs);
+    afio.init();
+    remap_uart(uart, remap);
+    enable(uart); // Enable UART clock
+
+    //Configure uart registers here
+    const brr = uart_reg(uart, 0x08);
+    const cr1 = uart_reg(uart, 0x0C);
+    const cr2 = uart_reg(uart, 0x10);
+    //const cr3 = uart_reg(uart, 0x14);
+    cr1.* = cfg.cr1_mask;
+    cr2.* = cfg.cr2_mask;
+
+    brr.* = cfg.brr;
+
+    cr1.* |= (1 << 13);
+}
+
+pub fn remap_uart(uart: Uart, remap: afio.Remap) void {
     switch (uart) {
-        .USART1 => core.enable_peripheral(.APB2, @intFromEnum(uart)), // Enable USART1 clock
-        .USART2 => core.enable_peripheral(.APB1, @intFromEnum(uart)), // Enable USART2 clock
-        .USART3 => core.enable_peripheral(.APB1, @intFromEnum(uart)), // Enable USART3 clock
+        .UART1 => afio.uart1_remap(remap),
+        .UART2 => afio.uart2_remap(remap),
+        .UART3 => afio.uart3_remap(remap),
+        else => {},
     }
 }
 
@@ -280,3 +367,18 @@ pub fn set_error_interrupt(uart: Uart, en: bool) void {
         cr3.* &= ~(1 << 0); // Disable EIE
     }
 }
+
+pub const uart_map = .{
+    .UART1 = .{
+        .TX = .{ .{ .port = .A, .num = 9 }, .{ .port = .B, .num = 6 }, .{ .port = .B, .num = 6 } },
+        .RX = .{ .{ .port = .A, .num = 10 }, .{ .port = .B, .num = 7 }, .{ .port = .B, .num = 7 } },
+    },
+    .UART2 = .{
+        .TX = .{ .{ .port = .A, .num = 2 }, .{ .port = .D, .num = 5 }, .{ .port = .D, .num = 5 } },
+        .RX = .{ .{ .port = .A, .num = 3 }, .{ .port = .D, .num = 6 }, .{ .port = .D, .num = 6 } },
+    },
+    .UART3 = .{
+        .TX = .{ .{ .port = .B, .num = 10 }, .{ .port = .C, .num = 10 }, .{ .port = .D, .num = 8 } },
+        .RX = .{ .{ .port = .B, .num = 11 }, .{ .port = .C, .num = 11 }, .{ .port = .D, .num = 9 } },
+    },
+};

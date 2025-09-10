@@ -43,6 +43,42 @@ pub fn timer4_remap(remap: Remap) void {
     }
 }
 
+pub fn spi1_remap(remap: Remap) void {
+    switch (remap) {
+        .PARTIAL_REMAP, .FULL_REMAP => remap_spi1(),
+        else => {},
+    }
+}
+
+pub fn spi3_remap(remap: Remap) void {
+    switch (remap) {
+        .PARTIAL_REMAP, .FULL_REMAP => remap_spi3(),
+        else => {},
+    }
+}
+
+pub fn uart1_remap(remap: Remap) void {
+    switch (remap) {
+        .PARTIAL_REMAP, .FULL_REMAP => remap_usart1(),
+        else => {},
+    }
+}
+
+pub fn uart2_remap(remap: Remap) void {
+    switch (remap) {
+        .PARTIAL_REMAP, .FULL_REMAP => remap_usart2(),
+        else => {},
+    }
+}
+
+pub fn uart3_remap(remap: Remap) void {
+    switch (remap) {
+        .PARTIAL_REMAP => remap_usart3_partial(),
+        .FULL_REMAP => remap_usart3_full(),
+        else => {},
+    }
+}
+
 fn afio_reg(offset: u32) *volatile u32 {
     return @ptrFromInt(0x4001_0000 + offset);
 }
@@ -50,6 +86,11 @@ fn afio_reg(offset: u32) *volatile u32 {
 pub fn remap_spi1() void {
     const mapr = afio_reg(0x04);
     mapr.* |= @as(u32, 1 << 0); // Set SPI1_REMAP bit
+}
+
+pub fn remap_spi3() void {
+    const mapr = afio_reg(0x04);
+    mapr.* |= @as(u32, 1 << 16); // Set SPI3_REMAP bit
 }
 
 pub fn remap_i2c1() void {

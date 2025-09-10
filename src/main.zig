@@ -14,7 +14,7 @@ pub export fn entry() void {
         .repetition_counter = 0,
     } });
     mcu.peripherals.timers.start_counter(.TIM2);
-    dimmer.init();
+    //dimmer.init();
     while (true) {
         blink.toggle(led);
         mcu.peripherals.timers.event_wait(.TIM2, .Update);
